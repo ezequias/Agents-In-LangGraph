@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<!-- saved from url=(0055)https://til.simonwillison.net/llms/python-react-pattern -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A simple Python implementation of the ReAct pattern for LLMs | Simon Willison’s TILs</title>
+<script defer="" data-domain="til.simonwillison.net" src="./A simple Python implementation of the ReAct pattern for LLMs _ Simon Willison’s TILs_files/plausible.js.download"></script>
+<link rel="alternate" type="application/atom+xml" title="Atom" href="https://til.simonwillison.net/tils/feed.atom">
+
+<link rel="stylesheet" href="./A simple Python implementation of the ReAct pattern for LLMs _ Simon Willison’s TILs_files/github-light.css">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@simonw">
+<meta name="twitter:title" content="A simple Python implementation of the ReAct pattern for LLMs">
+<meta name="twitter:description" content="A popular nightmare scenario for AI is giving it access to tools, so it can make API calls and execute its own code and generally break free of the constraints of its initial environment.">
+<meta name="twitter:image" content="https://s3.amazonaws.com/til.simonwillison.net/5970df5e970a76c1e05ccfdfc530d083.jpg">
+<meta name="twitter:image:alt" content="Screenshot: A simple Python implementation of the ReAct pattern for LLMs - A popular nightmare scenario for AI is giving it access to tools, so it can make API calls and execute its own code and generally break free of the constraints of its initial environment.">
+<meta property="og:url" content="https://til.simonwillison.net/llms/python-react-pattern">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A simple Python implementation of the ReAct pattern for LLMs">
+<meta property="og:description" content="A popular nightmare scenario for AI is giving it access to tools, so it can make API calls and execute its own code and generally break free of the constraints of its initial environment.">
+<meta property="og:image" content="https://s3.amazonaws.com/til.simonwillison.net/5970df5e970a76c1e05ccfdfc530d083.jpg">
+<meta property="og:image:alt" content="Screenshot: A simple Python implementation of the ReAct pattern for LLMs - A popular nightmare scenario for AI is giving it access to tools, so it can make API calls and execute its own code and generally break free of the constraints of its initial environment.">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="400">
+<script>
+// Fix broken images if data-canonical-src is available
+function handleImageError(event) {
+  if (event.target.tagName === 'IMG') {
+    const canonicalSrc = event.target.getAttribute('data-canonical-src');
+    if (canonicalSrc) {
+      event.target.src = canonicalSrc;
+    }
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.body.addEventListener('error', handleImageError, true);
+});
+</script>
+
+<style>
+body {
+    font-family: "Helvetica Neue", helvetica, sans-serif;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+}
+h1 {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+}
+.created {
+    border-top: 1px solid #ccc;
+    padding-top: 1em;
+    font-size: 0.8em;
+}
+.topic {
+    background-color: #ccc;
+    padding: 3px;
+    border: 1px solid #777;
+    font-size: 0.65em;
+    position: relative;
+    top: -1px;
+}
+.topic a {
+    text-decoration: none;
+    color: black;
+}
+pre {
+    white-space: pre-wrap;
+}
+pre[lang=wide] {
+    white-space: pre;
+    overflow: auto;
+}
+nav {
+    text-align: left;
+    background: linear-gradient(to bottom, rgb(154, 103, 175) 0%, rgb(96, 72, 129) 49%, rgb(100, 67, 130) 100%);
+    color: white;
+}
+nav p {
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+    padding: 4px 2em;
+}
+nav a:link,
+nav a:visited,
+nav a:hover,
+nav a:focus,
+nav a:active {
+    color: white;
+    text-decoration: none;
+}
+section.body {
+    padding: 0.5em 2em;
+    max-width: 800px;
+}
+@media (max-width: 600px) {
+    section.body {
+        padding: 0em 1em;
+    }
+    nav p {
+        padding: 4px 1em;
+    }
+}
+a, pre, code {
+    overflow-wrap: break-word;
+}
+table {
+    border-collapse: collapse;
+}
+th, td {
+    padding: 0.3em;
+    border: 1px solid #D3D3D3;
+    word-wrap: anywhere;
+}
+th {
+    background-color: #eee;
+}
+ul.related {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+ul.related li {
+    margin-bottom: 0.3em;
+}
+blockquote {
+    margin: 1em 0;
+    border-left: 0.75em solid #9e6bb52e;
+    padding-left: 0.75em;
+}
+</style>
+<style type="text/css" id="country-flag-fixer-ext-head">
+  @font-face {
+    font-family: "Twemoji Country Flags";
+    font-style: normal;
+    src: url('chrome-extension://jhcpefjbhmbkgjgipkhndplfbhdecijh/assets/TwemojiCountryFlags.woff2') format('woff2');
+    unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+  }
+
+  @font-face {
+    font-family: "Twemoji Country Flags";
+    font-style: italic; /* Defined to prevent italic styled flags */
+    src: url('chrome-extension://jhcpefjbhmbkgjgipkhndplfbhdecijh/assets/TwemojiCountryFlags.woff2') format('woff2');
+    unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+  }
+</style><style type="text/css" id="country-flag-fixer-ext">body { font-family: 'Twemoji Country Flags', "Helvetica Neue", helvetica, sans-serif !important; }
+h1 { font-family: 'Twemoji Country Flags', Georgia, "Times New Roman", Times, serif !important; }
+</style></head>
+<body>
+<nav>
+    <p><a href="https://til.simonwillison.net/">Simon Willison's TILs</a> <a href="https://simonwillison.net/">My blog</a></p>
+</nav>
+<section class="body">
+
+<h1>A simple Python implementation of the ReAct pattern for LLMs</h1>
+
+<p>A popular nightmare scenario for AI is giving it access to tools, so it can make API calls and execute its own code and generally break free of the constraints of its initial environment.</p>
+<p>Let's do that now!</p>
+<p>The ReAct pattern (for Reason+Act) is <a href="https://react-lm.github.io/" rel="nofollow">described in this paper</a>. It's a pattern where you implement additional actions that an LLM can take - searching Wikipedia or running calculations for example - and then teach it how to request that those actions are run, then feed their results back into the LLM.</p>
+<p>See also my post <a href="https://simonwillison.net/2023/Mar/17/beat-chatgpt-in-a-browser/#react-pattern" rel="nofollow">Could you train a ChatGPT-beating model for $85,000 and run it in a browser?</a>.</p>
+<p>Matt Webb wrote a great piece about that here: <a href="https://interconnected.org/home/2023/03/16/singularity" rel="nofollow">The surprising ease and effectiveness of AI in a loop</a>. In it Matt points out that the 1/10 price reduction on ChatGPT compared to GPT-3 makes it an ideal candidate for cheaply implementing this pattern.</p>
+<p>Matt used <a href="https://github.com/hwchase17/langchain">langchain</a> for his implementation. I decided to try building it from scratch on top of my <a href="https://til.simonwillison.net/gpt3/chatgpt-api" rel="nofollow">tiny Python wrapper</a> for the ChatGPT API.</p>
+<p>Here's my first attempt at a very rough implementation. It gains access to three new actions:</p>
+<ul>
+<li>
+<code>wikipedia: &lt;search term&gt;</code> - search Wikipedia and returns the snippet of the first result</li>
+<li>
+<code>simon_blog_search: &lt;search term&gt;</code> - search my blog and return the truncated text of the first result</li>
+<li>
+<code>calculate: &lt;expression&gt;</code> - evaluate an expression using Python's <code>eval()</code> function (so dangerous! This should absolutely use something like <a href="https://til.simonwillison.net/webassembly/python-in-a-wasm-sandbox" rel="nofollow">a WebAssembly sandbox</a> instead)</li>
+</ul>
+<h2><a id="user-content-some-examples" class="anchor" aria-hidden="true" href="https://til.simonwillison.net/llms/python-react-pattern#some-examples"><span aria-hidden="true" class="octicon octicon-link"></span></a>Some examples</h2>
+<p>Here are some (very cherry-picked) examples of my <code>query()</code> function running, showing the underlying deliberations of the LLM:</p>
+<h3><a id="user-content-what-does-england-share-borders-with" class="anchor" aria-hidden="true" href="https://til.simonwillison.net/llms/python-react-pattern#what-does-england-share-borders-with"><span aria-hidden="true" class="octicon octicon-link"></span></a>What does England share borders with?</h3>
+<div class="highlight highlight-source-python"><pre><span class="pl-en">query</span>(<span class="pl-s">"What does England share borders with?"</span>)</pre></div>
+<pre><code>Thought: I should list down the neighboring countries of England
+Action: wikipedia: England
+PAUSE
+ -- running wikipedia England
+Observation: &lt;span class="searchmatch"&gt;England&lt;/span&gt; is a country that is part of the United Kingdom. It shares land borders with Wales to its west and Scotland to its north. The Irish Sea lies northwest
+Answer: England shares borders with Wales and Scotland.
+</code></pre>
+<h3><a id="user-content-has-simon-been-to-madagascar" class="anchor" aria-hidden="true" href="https://til.simonwillison.net/llms/python-react-pattern#has-simon-been-to-madagascar"><span aria-hidden="true" class="octicon octicon-link"></span></a>Has Simon been to Madagascar?</h3>
+<div class="highlight highlight-source-python"><pre><span class="pl-en">query</span>(<span class="pl-s">"Has Simon been to Madagascar?"</span>)</pre></div>
+<pre><code>Thought: I can try and search on Simon's blog or look up Madagascar on Wikipedia to see if Simon has mentioned it in any of his writings.
+
+Action: simon_blog_search: Madagascar
+
+PAUSE
+ -- running simon_blog_search Madagascar
+Observation: Weeknotes: More releases, more museums: Lots of small releases this week.
+Datasette
+I released two bug fix releases for Datasette - 0.30.1 and 0.30.2. Changelog here. My Dogsheep personal analytics project means I&amp;#39;m using Datasette for my own data analysis every day, which inspires me to fix small but annoying bugs much more aggressively.
+I&amp;#39;ve also set myself a Streak goal to land a commit to Datasette every day.
+I landed a tiny new feature to master yesterday: a ?column__notin=x,y,z filter, working as an inverse of the existing ?column__in=x,y,z filter. See issue #614 for details.
+More Niche Museums
+I&amp;#39;ve been keeping up my streak of adding at least one new museum to www.niche-museums.com every day. This week I added the Pirates Museum in Antananarivo, Madagascar, the David Rumsey Map Center at Stanford, Galerie de Paléontologie et d’Anatomie comparée in Paris, DEVIL-ish Little Things in Vancouver, Washington, Mardi Gras World in New Orleans, Environmental Volunteers EcoCenter in Palo Alto, the Evergreen A
+Observation: According to the blog post searched on Simon's blog, he has visited the Pirates Museum in Antananarivo, Madagascar which is listed as a niche museum on www.niche-museums.com.
+
+Answer: Yes, Simon has been to Madagascar and visited the Pirates Museum located in Antananarivo.
+</code></pre>
+<h3><a id="user-content-fifteen--twenty-five" class="anchor" aria-hidden="true" href="https://til.simonwillison.net/llms/python-react-pattern#fifteen--twenty-five"><span aria-hidden="true" class="octicon octicon-link"></span></a>Fifteen * twenty five</h3>
+<div class="highlight highlight-source-python"><pre><span class="pl-en">query</span>(<span class="pl-s">"Fifteen * twenty five"</span>)</pre></div>
+<pre><code>Thought: The action required is a calculation
+Action: calculate: 15 * 25
+PAUSE
+ -- running calculate 15 * 25
+Observation: 375
+Answer: Fifteen times twenty five equals 375.
+</code></pre>
+<h2><a id="user-content-the-code" class="anchor" aria-hidden="true" href="https://til.simonwillison.net/llms/python-react-pattern#the-code"><span aria-hidden="true" class="octicon octicon-link"></span></a>The code</h2>
+<div class="highlight highlight-source-python"><pre><span class="pl-c"># This code is Apache 2 licensed:</span>
+<span class="pl-c"># https://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="pl-k">import</span> <span class="pl-s1">openai</span>
+<span class="pl-k">import</span> <span class="pl-s1">re</span>
+<span class="pl-k">import</span> <span class="pl-s1">httpx</span>
+
+<span class="pl-s1">openai</span>.<span class="pl-s1">api_key</span> <span class="pl-c1">=</span> <span class="pl-s">"sk-..."</span>
+ 
+<span class="pl-k">class</span> <span class="pl-v">ChatBot</span>:
+    <span class="pl-k">def</span> <span class="pl-en">__init__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">system</span><span class="pl-c1">=</span><span class="pl-s">""</span>):
+        <span class="pl-s1">self</span>.<span class="pl-s1">system</span> <span class="pl-c1">=</span> <span class="pl-s1">system</span>
+        <span class="pl-s1">self</span>.<span class="pl-s1">messages</span> <span class="pl-c1">=</span> []
+        <span class="pl-k">if</span> <span class="pl-s1">self</span>.<span class="pl-s1">system</span>:
+            <span class="pl-s1">self</span>.<span class="pl-s1">messages</span>.<span class="pl-en">append</span>({<span class="pl-s">"role"</span>: <span class="pl-s">"system"</span>, <span class="pl-s">"content"</span>: <span class="pl-s1">system</span>})
+    
+    <span class="pl-k">def</span> <span class="pl-en">__call__</span>(<span class="pl-s1">self</span>, <span class="pl-s1">message</span>):
+        <span class="pl-s1">self</span>.<span class="pl-s1">messages</span>.<span class="pl-en">append</span>({<span class="pl-s">"role"</span>: <span class="pl-s">"user"</span>, <span class="pl-s">"content"</span>: <span class="pl-s1">message</span>})
+        <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-s1">self</span>.<span class="pl-en">execute</span>()
+        <span class="pl-s1">self</span>.<span class="pl-s1">messages</span>.<span class="pl-en">append</span>({<span class="pl-s">"role"</span>: <span class="pl-s">"assistant"</span>, <span class="pl-s">"content"</span>: <span class="pl-s1">result</span>})
+        <span class="pl-k">return</span> <span class="pl-s1">result</span>
+    
+    <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-s1">self</span>):
+        <span class="pl-s1">completion</span> <span class="pl-c1">=</span> <span class="pl-s1">openai</span>.<span class="pl-v">ChatCompletion</span>.<span class="pl-en">create</span>(<span class="pl-s1">model</span><span class="pl-c1">=</span><span class="pl-s">"gpt-3.5-turbo"</span>, <span class="pl-s1">messages</span><span class="pl-c1">=</span><span class="pl-s1">self</span>.<span class="pl-s1">messages</span>)
+        <span class="pl-c"># Uncomment this to print out token usage each time, e.g.</span>
+        <span class="pl-c"># {"completion_tokens": 86, "prompt_tokens": 26, "total_tokens": 112}</span>
+        <span class="pl-c"># print(completion.usage)</span>
+        <span class="pl-k">return</span> <span class="pl-s1">completion</span>.<span class="pl-s1">choices</span>[<span class="pl-c1">0</span>].<span class="pl-s1">message</span>.<span class="pl-s1">content</span>
+
+<span class="pl-s1">prompt</span> <span class="pl-c1">=</span> <span class="pl-s">"""</span>
+<span class="pl-s">You run in a loop of Thought, Action, PAUSE, Observation.</span>
+<span class="pl-s">At the end of the loop you output an Answer</span>
+<span class="pl-s">Use Thought to describe your thoughts about the question you have been asked.</span>
+<span class="pl-s">Use Action to run one of the actions available to you - then return PAUSE.</span>
+<span class="pl-s">Observation will be the result of running those actions.</span>
+<span class="pl-s"></span>
+<span class="pl-s">Your available actions are:</span>
+<span class="pl-s"></span>
+<span class="pl-s">calculate:</span>
+<span class="pl-s">e.g. calculate: 4 * 7 / 3</span>
+<span class="pl-s">Runs a calculation and returns the number - uses Python so be sure to use floating point syntax if necessary</span>
+<span class="pl-s"></span>
+<span class="pl-s">wikipedia:</span>
+<span class="pl-s">e.g. wikipedia: Django</span>
+<span class="pl-s">Returns a summary from searching Wikipedia</span>
+<span class="pl-s"></span>
+<span class="pl-s">simon_blog_search:</span>
+<span class="pl-s">e.g. simon_blog_search: Django</span>
+<span class="pl-s">Search Simon's blog for that term</span>
+<span class="pl-s"></span>
+<span class="pl-s">Always look things up on Wikipedia if you have the opportunity to do so.</span>
+<span class="pl-s"></span>
+<span class="pl-s">Example session:</span>
+<span class="pl-s"></span>
+<span class="pl-s">Question: What is the capital of France?</span>
+<span class="pl-s">Thought: I should look up France on Wikipedia</span>
+<span class="pl-s">Action: wikipedia: France</span>
+<span class="pl-s">PAUSE</span>
+<span class="pl-s"></span>
+<span class="pl-s">You will be called again with this:</span>
+<span class="pl-s"></span>
+<span class="pl-s">Observation: France is a country. The capital is Paris.</span>
+<span class="pl-s"></span>
+<span class="pl-s">You then output:</span>
+<span class="pl-s"></span>
+<span class="pl-s">Answer: The capital of France is Paris</span>
+<span class="pl-s">"""</span>.<span class="pl-en">strip</span>()
+
+
+<span class="pl-s1">action_re</span> <span class="pl-c1">=</span> <span class="pl-s1">re</span>.<span class="pl-en">compile</span>(<span class="pl-s">'^Action: (\w+): (.*)$'</span>)
+
+<span class="pl-k">def</span> <span class="pl-en">query</span>(<span class="pl-s1">question</span>, <span class="pl-s1">max_turns</span><span class="pl-c1">=</span><span class="pl-c1">5</span>):
+    <span class="pl-s1">i</span> <span class="pl-c1">=</span> <span class="pl-c1">0</span>
+    <span class="pl-s1">bot</span> <span class="pl-c1">=</span> <span class="pl-v">ChatBot</span>(<span class="pl-s1">prompt</span>)
+    <span class="pl-s1">next_prompt</span> <span class="pl-c1">=</span> <span class="pl-s1">question</span>
+    <span class="pl-k">while</span> <span class="pl-s1">i</span> <span class="pl-c1">&lt;</span> <span class="pl-s1">max_turns</span>:
+        <span class="pl-s1">i</span> <span class="pl-c1">+=</span> <span class="pl-c1">1</span>
+        <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-en">bot</span>(<span class="pl-s1">next_prompt</span>)
+        <span class="pl-en">print</span>(<span class="pl-s1">result</span>)
+        <span class="pl-s1">actions</span> <span class="pl-c1">=</span> [<span class="pl-s1">action_re</span>.<span class="pl-en">match</span>(<span class="pl-s1">a</span>) <span class="pl-k">for</span> <span class="pl-s1">a</span> <span class="pl-c1">in</span> <span class="pl-s1">result</span>.<span class="pl-en">split</span>(<span class="pl-s">'<span class="pl-cce">\n</span>'</span>) <span class="pl-k">if</span> <span class="pl-s1">action_re</span>.<span class="pl-en">match</span>(<span class="pl-s1">a</span>)]
+        <span class="pl-k">if</span> <span class="pl-s1">actions</span>:
+            <span class="pl-c"># There is an action to run</span>
+            <span class="pl-s1">action</span>, <span class="pl-s1">action_input</span> <span class="pl-c1">=</span> <span class="pl-s1">actions</span>[<span class="pl-c1">0</span>].<span class="pl-en">groups</span>()
+            <span class="pl-k">if</span> <span class="pl-s1">action</span> <span class="pl-c1">not</span> <span class="pl-c1">in</span> <span class="pl-s1">known_actions</span>:
+                <span class="pl-k">raise</span> <span class="pl-v">Exception</span>(<span class="pl-s">"Unknown action: {}: {}"</span>.<span class="pl-en">format</span>(<span class="pl-s1">action</span>, <span class="pl-s1">action_input</span>))
+            <span class="pl-en">print</span>(<span class="pl-s">" -- running {} {}"</span>.<span class="pl-en">format</span>(<span class="pl-s1">action</span>, <span class="pl-s1">action_input</span>))
+            <span class="pl-s1">observation</span> <span class="pl-c1">=</span> <span class="pl-s1">known_actions</span>[<span class="pl-s1">action</span>](<span class="pl-s1">action_input</span>)
+            <span class="pl-en">print</span>(<span class="pl-s">"Observation:"</span>, <span class="pl-s1">observation</span>)
+            <span class="pl-s1">next_prompt</span> <span class="pl-c1">=</span> <span class="pl-s">"Observation: {}"</span>.<span class="pl-en">format</span>(<span class="pl-s1">observation</span>)
+        <span class="pl-k">else</span>:
+            <span class="pl-k">return</span>
+
+
+<span class="pl-k">def</span> <span class="pl-en">wikipedia</span>(<span class="pl-s1">q</span>):
+    <span class="pl-k">return</span> <span class="pl-s1">httpx</span>.<span class="pl-en">get</span>(<span class="pl-s">"https://en.wikipedia.org/w/api.php"</span>, <span class="pl-s1">params</span><span class="pl-c1">=</span>{
+        <span class="pl-s">"action"</span>: <span class="pl-s">"query"</span>,
+        <span class="pl-s">"list"</span>: <span class="pl-s">"search"</span>,
+        <span class="pl-s">"srsearch"</span>: <span class="pl-s1">q</span>,
+        <span class="pl-s">"format"</span>: <span class="pl-s">"json"</span>
+    }).<span class="pl-en">json</span>()[<span class="pl-s">"query"</span>][<span class="pl-s">"search"</span>][<span class="pl-c1">0</span>][<span class="pl-s">"snippet"</span>]
+
+
+<span class="pl-k">def</span> <span class="pl-en">simon_blog_search</span>(<span class="pl-s1">q</span>):
+    <span class="pl-s1">results</span> <span class="pl-c1">=</span> <span class="pl-s1">httpx</span>.<span class="pl-en">get</span>(<span class="pl-s">"https://datasette.simonwillison.net/simonwillisonblog.json"</span>, <span class="pl-s1">params</span><span class="pl-c1">=</span>{
+        <span class="pl-s">"sql"</span>: <span class="pl-s">"""</span>
+<span class="pl-s">        select</span>
+<span class="pl-s">          blog_entry.title || ': ' || substr(html_strip_tags(blog_entry.body), 0, 1000) as text,</span>
+<span class="pl-s">          blog_entry.created</span>
+<span class="pl-s">        from</span>
+<span class="pl-s">          blog_entry join blog_entry_fts on blog_entry.rowid = blog_entry_fts.rowid</span>
+<span class="pl-s">        where</span>
+<span class="pl-s">          blog_entry_fts match escape_fts(:q)</span>
+<span class="pl-s">        order by</span>
+<span class="pl-s">          blog_entry_fts.rank</span>
+<span class="pl-s">        limit</span>
+<span class="pl-s">          1"""</span>.<span class="pl-en">strip</span>(),
+        <span class="pl-s">"_shape"</span>: <span class="pl-s">"array"</span>,
+        <span class="pl-s">"q"</span>: <span class="pl-s1">q</span>,
+    }).<span class="pl-en">json</span>()
+    <span class="pl-k">return</span> <span class="pl-s1">results</span>[<span class="pl-c1">0</span>][<span class="pl-s">"text"</span>]
+
+<span class="pl-k">def</span> <span class="pl-en">calculate</span>(<span class="pl-s1">what</span>):
+    <span class="pl-k">return</span> <span class="pl-en">eval</span>(<span class="pl-s1">what</span>)
+
+<span class="pl-s1">known_actions</span> <span class="pl-c1">=</span> {
+    <span class="pl-s">"wikipedia"</span>: <span class="pl-s1">wikipedia</span>,
+    <span class="pl-s">"calculate"</span>: <span class="pl-s1">calculate</span>,
+    <span class="pl-s">"simon_blog_search"</span>: <span class="pl-s1">simon_blog_search</span>
+}</pre></div>
+<p>This is not a very robust implementation at all - there's a ton of room for improvement. But I love how simple it is - it really does just take a few dozen lines of Python to make these extra capabilities available to the LLM and have it start to use them.</p>
+
+
+
+
+  <h3 id="related">Related <a href="https://til.simonwillison.net/llms/python-react-pattern#related" style="text-decoration: none; color: rgb(183, 179, 179); font-size: 0.8em;">#</a></h3>
+  <ul class="related">
+    
+    <li><span class="topic">gpt3</span> <a href="https://til.simonwillison.net/gpt3/chatgpt-api">A simple Python wrapper for the ChatGPT API</a> - 2023-03-02</li>
+    
+    <li><span class="topic">llms</span> <a href="https://til.simonwillison.net/llms/llama-cpp-python-grammars">Using llama-cpp-python grammars to generate JSON</a> - 2023-09-12</li>
+    
+    <li><span class="topic">llms</span> <a href="https://til.simonwillison.net/llms/claude-hacker-news-themes">Summarizing Hacker News discussion themes with Claude and LLM</a> - 2023-09-09</li>
+    
+    <li><span class="topic">llms</span> <a href="https://til.simonwillison.net/llms/colbert-ragatouille">Exploring ColBERT with RAGatouille</a> - 2024-01-27</li>
+    
+    <li><span class="topic">gpt3</span> <a href="https://til.simonwillison.net/gpt3/gpt4-api-design">GPT-4 for API design research</a> - 2023-04-06</li>
+    
+    <li><span class="topic">llms</span> <a href="https://til.simonwillison.net/llms/llama-7b-m2">Running LLaMA 7B and 13B on a 64GB M2 MacBook Pro with llama.cpp</a> - 2023-03-10</li>
+    
+    <li><span class="topic">llms</span> <a href="https://til.simonwillison.net/llms/code-interpreter-expansions">Expanding ChatGPT Code Interpreter with Python packages, Deno and Lua</a> - 2023-04-30</li>
+    
+    <li><span class="topic">llms</span> <a href="https://til.simonwillison.net/llms/larger-context-openai-models-llm">Running OpenAI's large context models using llm</a> - 2023-06-13</li>
+    
+    <li><span class="topic">httpx</span> <a href="https://til.simonwillison.net/httpx/openai-log-requests-responses">Logging OpenAI API requests and responses using HTTPX</a> - 2024-01-26</li>
+    
+    <li><span class="topic">datasette</span> <a href="https://til.simonwillison.net/datasette/row-selection-prototype">Interactive row selection prototype with Datasette</a> - 2023-03-30</li>
+    
+  </ul>
+
+
+<p class="created">Created 2023-03-17T07:52:22-07:00, updated 2023-03-20T15:18:43-07:00 · <a href="https://github.com/simonw/til/commits/main/llms/python-react-pattern.md">History</a> · <a href="https://github.com/simonw/til/blob/main/llms/python-react-pattern.md">Edit</a></p>
+
+<script>
+// Add visible # links to all h2+ headings
+document.querySelectorAll('h2,h3,h4,h5,h6').forEach(el => {
+  let id = el.id || null;
+
+  // Case 1: link nested inside the heading (".heading-link")
+  const inner = el.querySelector('.heading-link');
+  if (inner) {
+    id = id || (inner.getAttribute('href') || '').replace(/^#/, '') || el.id;
+    el.textContent = inner.textContent; // keep just the text
+    inner.remove();
+  }
+
+  // Case 2: GitHub-style sibling <a class="anchor"> next to the heading
+  if (!id) {
+    const sib = el.nextElementSibling;
+    if (sib && sib.matches('a.anchor')) {
+      // Prefer the href target (e.g. "#uv-test") over the sibling's id ("user-content-uv-test")
+      const href = sib.getAttribute('href') || '';
+      const hrefId = href.startsWith('#') ? href.slice(1) : null;
+      id = hrefId || sib.id || null;
+      sib.remove();
+    }
+  }
+
+  if (!id) return; // nothing to do if we couldn't determine an id
+
+  el.id = id;
+
+  const hashLink = document.createElement('a');
+  hashLink.href = '#' + id;
+  hashLink.textContent = '#';
+  hashLink.style.textDecoration = 'none';
+  hashLink.style.color = '#b7b3b3';
+  hashLink.style.fontSize = '0.8em';
+
+  el.appendChild(document.createTextNode(' '));
+  el.appendChild(hashLink);
+});
+
+// Add an audio player after any .wav or .mp3 links
+// Get all anchor tags on the page
+document.querySelectorAll('a[href$=".wav"],a[href$=".mp3"],a[href$=".m4a"]').forEach(function(link) {
+  var href = link.getAttribute('href');
+  var audio = document.createElement('audio');
+  audio.controls = true;  // Show controls
+  audio.src = href;
+  var paragraph = document.createElement('p');
+  paragraph.appendChild(audio);
+  link.insertAdjacentElement('afterend', paragraph);
+});
+</script>
+
+</section>
+
+</body></html>
